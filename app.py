@@ -355,11 +355,103 @@ def prepare_graph(elements, connections, countries, categories, entity_types, ed
     return nodes, edges, root_name
 
 
-def graph_html(nodes, edges, root_name, jump_to, height=840):
-    nodes_json = json.dumps(nodes, ensure_ascii=False)
-    edges_json = json.dumps(edges, ensure_ascii=False)
+def graph_html(nodes, edges, root_name, jump_to, theme_mode="dark", height=840):
+    theme_mode = "light" if str(theme_mode).lower() == "light" else "dark"
+    themes = {
+        "dark": {
+            "page_bg": "#090E19",
+            "map_bg_1": "#111C31",
+            "map_bg_2": "#090E19",
+            "border": "#1E293B",
+            "surface": "rgba(10,16,29,.97)",
+            "surface_sticky": "rgba(10,16,29,.98)",
+            "surface_2": "#101827",
+            "surface_3": "#0D1524",
+            "control": "rgba(15,23,42,.94)",
+            "control_hover": "#1E293B",
+            "text": "#F8FAFC",
+            "text_2": "#E5E7EB",
+            "muted": "#94A3B8",
+            "muted_2": "#7F8EA3",
+            "node_stroke": "#0B1020",
+            "node_border": "#F8FAFC",
+            "node_highlight": "#FFFFFF",
+            "edge": "rgba(100,116,139,.32)",
+            "edge_contact": "rgba(245,158,11,.38)",
+            "edge_highlight": "#F8FAFC",
+            "edge_hover": "#CBD5E1",
+            "trace_edge": "#38BDF8",
+            "trace_edge_contact": "#FBBF24",
+            "trace_edge_shadow": "rgba(56,189,248,.42)",
+            "shadow": "rgba(0,0,0,.45)",
+            "hint_bg": "rgba(9,14,25,.78)",
+        },
+        "light": {
+            "page_bg": "#F8FAFC",
+            "map_bg_1": "#FFFFFF",
+            "map_bg_2": "#F1F5F9",
+            "border": "#CBD5E1",
+            "surface": "rgba(255,255,255,.97)",
+            "surface_sticky": "rgba(255,255,255,.99)",
+            "surface_2": "#F8FAFC",
+            "surface_3": "#F1F5F9",
+            "control": "rgba(255,255,255,.96)",
+            "control_hover": "#F1F5F9",
+            "text": "#0F172A",
+            "text_2": "#1E293B",
+            "muted": "#64748B",
+            "muted_2": "#64748B",
+            "node_stroke": "#FFFFFF",
+            "node_border": "#475569",
+            "node_highlight": "#0F172A",
+            "edge": "rgba(71,85,105,.30)",
+            "edge_contact": "rgba(217,119,6,.42)",
+            "edge_highlight": "#0F172A",
+            "edge_hover": "#475569",
+            "trace_edge": "#0369A1",
+            "trace_edge_contact": "#B45309",
+            "trace_edge_shadow": "rgba(3,105,161,.22)",
+            "shadow": "rgba(15,23,42,.16)",
+            "hint_bg": "rgba(255,255,255,.88)",
+        },
+    }
+    theme = themes[theme_mode]
+
+    themed_nodes = []
+    for node in nodes:
+        n = dict(node)
+        font = dict(n.get("font", {}))
+        font.update({"color": theme["text"], "strokeColor": theme["node_stroke"], "strokeWidth": 4})
+        n["font"] = font
+        color = dict(n.get("color", {}))
+        color["border"] = "#FBBF24" if n.get("id") == "You" else theme["node_border"]
+        highlight = dict(color.get("highlight", {}))
+        highlight["border"] = theme["node_highlight"]
+        color["highlight"] = highlight
+        n["color"] = color
+        themed_nodes.append(n)
+
+    themed_edges = []
+    for edge in edges:
+        e = dict(edge)
+        color = dict(e.get("color", {}))
+        is_contact = e.get("relationship") == "My Contact"
+        color.update({
+            "color": theme["edge_contact"] if is_contact else theme["edge"],
+            "highlight": theme["edge_highlight"],
+            "hover": theme["edge_hover"],
+            "inherit": False,
+        })
+        e["color"] = color
+        themed_edges.append(e)
+
+    nodes_json = json.dumps(themed_nodes, ensure_ascii=False)
+    edges_json = json.dumps(themed_edges, ensure_ascii=False)
     root_json = json.dumps(root_name, ensure_ascii=False)
     jump_json = json.dumps(jump_to or "", ensure_ascii=False)
+    theme_json = json.dumps(theme, ensure_ascii=False)
+    themes_json = json.dumps(themes, ensure_ascii=False)
+    theme_mode_json = json.dumps(theme_mode)
     return f"""
 <!DOCTYPE html>
 <html>
@@ -368,35 +460,38 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
 <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 <style>
   * {{ box-sizing:border-box; }}
-  html, body {{ margin:0; padding:0; background:#090E19; font-family:Inter,Segoe UI,Arial,sans-serif; overflow:hidden; }}
-  #wrap {{ position:relative; width:100%; height:{height}px; background:radial-gradient(circle at 45% 45%, #111C31 0%, #090E19 70%); border:1px solid #1E293B; border-radius:16px; overflow:hidden; }}
+  :root {{
+    --page-bg:{theme["page_bg"]}; --map-bg-1:{theme["map_bg_1"]}; --map-bg-2:{theme["map_bg_2"]}; --border:{theme["border"]};
+    --surface:{theme["surface"]}; --surface-sticky:{theme["surface_sticky"]}; --surface-2:{theme["surface_2"]}; --surface-3:{theme["surface_3"]};
+    --control:{theme["control"]}; --control-hover:{theme["control_hover"]}; --text:{theme["text"]}; --text-2:{theme["text_2"]};
+    --muted:{theme["muted"]}; --muted-2:{theme["muted_2"]}; --shadow:{theme["shadow"]}; --hint-bg:{theme["hint_bg"]};
+  }}
+  html, body {{ margin:0; padding:0; background:transparent !important; color:var(--text); font-family:Inter,Segoe UI,Arial,sans-serif; overflow:hidden; }}
+  #wrap {{ position:relative; width:100%; height:{height}px; background:transparent !important; border:none; border-radius:14px; overflow:hidden; }}
   #network {{ width:100%; height:100%; }}
   #toolbar {{ position:absolute; z-index:12; top:14px; left:14px; display:flex; gap:7px; }}
-  .btn {{ background:rgba(15,23,42,.94); color:#E2E8F0; border:1px solid #334155; border-radius:9px; padding:8px 11px; cursor:pointer; font-size:12px; box-shadow:0 5px 18px rgba(0,0,0,.18); }}
-  .btn:hover {{ background:#1E293B; border-color:#475569; }}
-  #panel {{ position:absolute; z-index:11; top:14px; right:14px; width:340px; max-height:calc(100% - 28px); overflow:auto; background:rgba(10,16,29,.97); color:#E5E7EB; border:1px solid #334155; border-radius:15px; padding:0; box-shadow:0 16px 40px rgba(0,0,0,.45); display:none; }}
-  #panelHead {{ padding:18px 18px 14px; border-bottom:1px solid #253247; position:sticky; top:0; background:rgba(10,16,29,.98); z-index:2; }}
-  #panelTitle {{ margin:0; font-size:20px; color:white; line-height:1.2; }}
-  #panelSubtitle {{ color:#94A3B8; margin-top:6px; font-size:12px; }}
-  #panelBody {{ padding:15px 18px 18px; }}
-  .sectionTitle {{ margin:17px 0 9px; color:#94A3B8; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; }}
-  .detailGrid {{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }}
-  .tile {{ border:1px solid #263349; background:#101827; border-radius:9px; padding:8px 10px; min-height:53px; }}
-  .k {{ color:#94A3B8; font-size:9px; text-transform:uppercase; letter-spacing:.06em; }}
-  .v {{ color:#F8FAFC; font-size:12px; margin-top:4px; line-height:1.35; }}
-  .relation {{ padding:9px 0; border-bottom:1px solid #1E293B; }}
+  .btn {{ background:var(--control); color:var(--text-2); border:1px solid var(--border); border-radius:9px; padding:8px 11px; cursor:pointer; font-size:12px; box-shadow:0 5px 18px var(--shadow); }}
+  .btn:hover {{ background:var(--control-hover); }}
+  #panel {{ position:absolute; z-index:11; top:14px; right:14px; width:min(460px,calc(100% - 28px)); max-height:calc(100% - 28px); overflow:auto; background:var(--surface); color:var(--text-2); border:1px solid var(--border); border-radius:15px; padding:0; box-shadow:0 16px 40px var(--shadow); display:none; }}
+  #panelHead {{ padding:22px 22px 17px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface-sticky); z-index:2; }}
+  #panelTitle {{ margin:0; font-size:25px; font-weight:750; color:var(--text); line-height:1.2; }}
+  #panelSubtitle {{ color:var(--muted); margin-top:8px; font-size:14px; line-height:1.45; }}
+  #panelBody {{ padding:18px 22px 24px; }}
+  .sectionTitle {{ margin:22px 0 11px; color:var(--muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; }}
+  .detailGrid {{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }}
+  .tile {{ border:1px solid var(--border); background:var(--surface-2); border-radius:10px; padding:12px 13px; min-height:68px; }}
+  .k {{ color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.06em; }}
+  .v {{ color:var(--text); font-size:15px; margin-top:5px; line-height:1.45; }}
+  .relation {{ padding:12px 0; border-bottom:1px solid var(--border); }}
   .relation:last-child {{ border-bottom:none; }}
-  .relName {{ color:#F8FAFC; font-size:12px; font-weight:600; }}
-  .relMeta {{ color:#94A3B8; font-size:10px; margin-top:3px; }}
-  .badge {{ display:inline-block; border:1px solid #334155; background:#111827; color:#CBD5E1; border-radius:999px; padding:3px 7px; font-size:9px; margin:5px 4px 0 0; }}
-  .score {{ display:flex; gap:3px; margin-top:6px; }}
-  .dot {{ width:8px; height:8px; border-radius:50%; background:#334155; }}
+  .relName {{ color:var(--text); font-size:14px; font-weight:650; line-height:1.35; }}
+  .relMeta {{ color:var(--muted); font-size:12px; margin-top:4px; line-height:1.4; }}
+  .badge {{ display:inline-block; border:1px solid var(--border); background:var(--surface-3); color:var(--text-2); border-radius:999px; padding:5px 9px; font-size:11px; margin:5px 5px 0 0; }}
+  .score {{ display:flex; gap:4px; margin-top:8px; }}
+  .dot {{ width:9px; height:9px; border-radius:50%; background:var(--border); }}
   .dot.on {{ background:#F59E0B; }}
-  .definitionBox {{ margin-top:10px; border:1px solid #263349; background:#0D1524; border-radius:10px; padding:10px 11px; }}
-  .definitionRow {{ margin:7px 0; color:#CBD5E1; font-size:10px; line-height:1.45; }}
-  .definitionRow b {{ color:#F8FAFC; }}
-  #hint {{ position:absolute; left:16px; bottom:14px; color:#7F8EA3; font-size:10px; background:rgba(9,14,25,.78); padding:7px 10px; border-radius:8px; border:1px solid rgba(51,65,85,.5); }}
-  #rootPill {{ position:absolute; z-index:10; top:16px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,.86); border:1px solid #334155; color:#CBD5E1; border-radius:999px; padding:7px 11px; font-size:11px; pointer-events:none; }}
+  #hint {{ position:absolute; left:16px; bottom:14px; color:var(--muted-2); font-size:10px; background:var(--hint-bg); padding:7px 10px; border-radius:8px; border:1px solid var(--border); }}
+  #rootPill {{ position:absolute; z-index:10; top:16px; left:50%; transform:translateX(-50%); background:var(--control); border:1px solid var(--border); color:var(--text-2); border-radius:999px; padding:7px 11px; font-size:11px; pointer-events:none; }}
 </style>
 </head>
 <body>
@@ -419,6 +514,11 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
   const originalEdges = {edges_json};
   const rootName = {root_json};
   const jumpTo = {jump_json};
+  const THEMES = {themes_json};
+  const initialThemeMode = {theme_mode_json};
+  let themePreference = 'auto';
+  let activeThemeName = initialThemeMode;
+  let theme = THEMES[activeThemeName];
   document.getElementById('rootLabel').textContent = rootName;
 
   const nodes = new vis.DataSet(originalNodes);
@@ -444,6 +544,97 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
   let activeTraceNodes = null;
   let activeTraceEdges = null;
   const hubName = originalNodes.some(n => n.id === 'You') ? 'You' : rootName;
+
+  function cssRgbToMode(value) {{
+    const m = String(value || '').match(/rgba?\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)/i);
+    if (!m) return null;
+    const r = Number(m[1]), g = Number(m[2]), b = Number(m[3]);
+    const lum = (0.2126*r + 0.7152*g + 0.0722*b) / 255;
+    return lum >= 0.56 ? 'light' : 'dark';
+  }}
+
+  function detectParentTheme() {{
+    try {{
+      const doc = window.parent.document;
+      const candidates = [
+        doc.querySelector('[data-testid="stAppViewContainer"]'),
+        doc.querySelector('.stApp'),
+        doc.body,
+        doc.documentElement
+      ].filter(Boolean);
+      for (const el of candidates) {{
+        const cs = window.parent.getComputedStyle(el);
+        const mode = cssRgbToMode(cs.backgroundColor);
+        if (mode) return mode;
+      }}
+    }} catch (err) {{}}
+    try {{
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }} catch (err) {{
+      return initialThemeMode;
+    }}
+  }}
+
+  function setCssTheme(t) {{
+    const root = document.documentElement.style;
+    const vars = {{
+      '--page-bg':t.page_bg, '--map-bg-1':t.map_bg_1, '--map-bg-2':t.map_bg_2, '--border':t.border,
+      '--surface':t.surface, '--surface-sticky':t.surface_sticky, '--surface-2':t.surface_2, '--surface-3':t.surface_3,
+      '--control':t.control, '--control-hover':t.control_hover, '--text':t.text, '--text-2':t.text_2,
+      '--muted':t.muted, '--muted-2':t.muted_2, '--shadow':t.shadow, '--hint-bg':t.hint_bg
+    }};
+    Object.entries(vars).forEach(([k,v]) => root.setProperty(k,v));
+  }}
+
+  function applyTheme(mode, force=false) {{
+    const next = mode === 'light' ? 'light' : 'dark';
+    if (!force && next === activeThemeName) return;
+    activeThemeName = next;
+    theme = THEMES[next];
+    setCssTheme(theme);
+
+    nodes.update(originalNodes.map(n => {{
+      const current = nodes.get(n.id) || {{}};
+      const baseColor = Object.assign({{}}, n.color || {{}});
+      const highlight = Object.assign({{}}, baseColor.highlight || {{}}, {{border:theme.node_highlight}});
+      baseColor.border = n.id === 'You' ? '#FBBF24' : theme.node_border;
+      baseColor.highlight = highlight;
+      const baseFont = Object.assign({{}}, current.font || n.font || {{}}, {{
+        color: theme.text,
+        strokeColor: theme.node_stroke,
+        strokeWidth: 4
+      }});
+      if (current.font && String(current.font.color || '').includes('rgba(0,0,0,0)')) {{
+        baseFont.color = 'rgba(0,0,0,0)';
+        baseFont.strokeColor = 'rgba(0,0,0,0)';
+      }}
+      return {{id:n.id, color:baseColor, font:baseFont}};
+    }}));
+
+    edges.update(originalEdges.map(e => {{
+      const current = edges.get(e.id) || {{}};
+      const traced = activeTraceEdges && activeTraceEdges.has(e.id);
+      const isContact = e.relationship === 'My Contact';
+      return {{
+        id:e.id,
+        hidden:current.hidden === true,
+        color:{{
+          color: traced ? (isContact ? theme.trace_edge_contact : theme.trace_edge) : (isContact ? theme.edge_contact : theme.edge),
+          highlight: traced ? (isContact ? theme.trace_edge_contact : theme.trace_edge) : theme.edge_highlight,
+          hover: traced ? (isContact ? theme.trace_edge_contact : theme.trace_edge) : theme.edge_hover,
+          inherit:false
+        }},
+        width: traced ? Math.max(3.2, e.width || 1) : (current.width || e.width),
+        shadow: traced ? {{enabled:true,color:theme.trace_edge_shadow,size:5,x:0,y:0}} : {{enabled:false}}
+      }};
+    }}));
+    scheduleLabelRefresh(0);
+  }}
+
+  function syncAutoTheme(force=false) {{
+    if (themePreference !== 'auto') return;
+    applyTheme(detectParentTheme(), force);
+  }}
 
   function buildAdjacency() {{
     const adj = new Map();
@@ -494,15 +685,15 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
 
   function transparentFont(n) {{
     const f = Object.assign({{}}, n.font || {{}});
-    f.color = 'rgba(248,250,252,0)';
-    f.strokeColor = 'rgba(11,16,32,0)';
+    f.color = 'rgba(0,0,0,0)';
+    f.strokeColor = 'rgba(0,0,0,0)';
     return f;
   }}
 
   function visibleFont(n, size=null) {{
     const f = Object.assign({{}}, n.font || {{}});
-    f.color = '#F8FAFC';
-    f.strokeColor = '#0B1020';
+    f.color = theme.text;
+    f.strokeColor = theme.node_stroke;
     f.strokeWidth = 4;
     if (size !== null) f.size = size;
     return f;
@@ -629,14 +820,6 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
         <div class="tile"><div class="k">Status</div><div class="v">${{esc(d['Relationship status'] || '—')}}</div></div>
         <div class="tile"><div class="k">Network connections</div><div class="v">${{esc(d['Network connections'] ?? 0)}}</div><div class="relMeta">Drives node size</div></div>
       </div>
-      <div class="sectionTitle">How to read these fields</div>
-      <div class="definitionBox">
-        <div class="definitionRow"><b>Relevance</b> — how important this stakeholder is to the objective or topic you are mapping.</div>
-        <div class="definitionRow"><b>Reachability</b> — how easily your team can access the stakeholder directly or through existing relationships.</div>
-        <div class="definitionRow"><b>Alignment</b> — how supportive, compatible or positively disposed the stakeholder is toward the objective.</div>
-        <div class="definitionRow"><b>Status</b> — the current relationship stage recorded in the workbook, such as current, historical or target.</div>
-        <div class="definitionRow"><b>Node size</b> — calculated automatically from the number of visible connected entities; it is not based on Relevance.</div>
-      </div>
       ${{desc}}${{notes}}
       <div class="sectionTitle">Visible relationships (${{network.getConnectedEdges(id).length}})</div>
       ${{relationRows(id)}}`;
@@ -671,8 +854,14 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
     edges.update(originalEdges.map(e=>({{
       id:e.id,
       hidden:!trace.edges.has(e.id),
-      color:trace.edges.has(e.id) ? {{color:'#CBD5E1',highlight:'#FFFFFF',hover:'#F8FAFC',inherit:false}} : e.color,
-      width:trace.edges.has(e.id) ? Math.max(2.0,e.width||1) : e.width
+      color:trace.edges.has(e.id) ? {{
+        color:e.relationship === 'My Contact' ? theme.trace_edge_contact : theme.trace_edge,
+        highlight:e.relationship === 'My Contact' ? theme.trace_edge_contact : theme.trace_edge,
+        hover:e.relationship === 'My Contact' ? theme.trace_edge_contact : theme.trace_edge,
+        inherit:false
+      }} : e.color,
+      width:trace.edges.has(e.id) ? Math.max(3.2,e.width||1) : e.width,
+      shadow:trace.edges.has(e.id) ? {{enabled:true,color:theme.trace_edge_shadow,size:5,x:0,y:0}} : {{enabled:false}}
     }})));
     network.selectNodes([id]);
     showNodePanel(id);
@@ -720,6 +909,10 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
     refreshLabels();
   }};
 
+
+  // Theme contrast is supplied by Streamlit; the canvas itself stays transparent.
+
+
   let initialViewApplied = false;
   function applyInitialView() {{
     if (initialViewApplied) return;
@@ -736,6 +929,7 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
   }}
   // There is no stabilization lifecycle because physics is disabled.
   // The Python-generated x/y coordinates are the authoritative layout.
+  applyTheme(initialThemeMode, true);
   setTimeout(applyInitialView, 60);
 </script>
 </body>
@@ -755,7 +949,7 @@ h1 {margin-bottom:.1rem; font-size:2rem !important;}
 """, unsafe_allow_html=True)
 
 st.title("Stakeholder Rolodex")
-st.markdown('<div class="small-muted">Relationship intelligence prototype · V0.5</div>', unsafe_allow_html=True)
+st.markdown('<div class="small-muted">Relationship intelligence prototype · V0.10</div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.subheader("Data")
@@ -799,7 +993,7 @@ with st.sidebar:
     st.caption("Tip: keep filters broad, then use search + scope to investigate a stakeholder.")
 
 # Main interaction controls: search is intentionally prominent rather than buried in sidebar.
-c_search, c_scope = st.columns([3, 1.15])
+c_search, c_scope, c_theme = st.columns([3, 1.15, 1.05])
 default_root = "You" if "You" in all_names else (all_names[0] if all_names else "")
 with c_search:
     jump_to = st.selectbox(
@@ -810,6 +1004,8 @@ with c_search:
     )
 with c_scope:
     scope_label = st.selectbox("View scope", ["Entire map", "1 degree", "2 degrees", "3 degrees"], index=0)
+with c_theme:
+    map_appearance = st.selectbox("Map appearance", ["Auto", "Light", "Dark"], index=0, help="Auto uses Streamlit's current theme for text/edge contrast. The map canvas itself is transparent and follows the page background.")
 
 root_name = jump_to or default_root
 scope_hops = None if scope_label == "Entire map" else int(scope_label.split()[0])
@@ -828,7 +1024,19 @@ m4.metric("Organisations", sum(1 for n in nodes if n["nodeType"].lower() == "org
 if not nodes:
     st.warning("No entities match the current filters.")
 else:
-    components.html(graph_html(nodes, edges, root_name, jump_to), height=870, scrolling=False)
+    if map_appearance == "Light":
+        theme_mode = "light"
+    elif map_appearance == "Dark":
+        theme_mode = "dark"
+    else:
+        try:
+            theme_mode = str(st.context.theme.type).lower()
+        except Exception:
+            configured_base = str(st.get_option("theme.base") or "").lower()
+            theme_mode = "dark" if configured_base == "dark" else "light"
+        if theme_mode not in {"light", "dark"}:
+            theme_mode = "light"
+    components.html(graph_html(nodes, edges, root_name, jump_to, theme_mode=theme_mode), height=870, scrolling=False)
 
 with st.expander("Legend"):
     active_categories = sorted({n["category"] for n in nodes}) if nodes else []
@@ -839,4 +1047,14 @@ with st.expander("Legend"):
             f'<span style="display:inline-block;width:10px;height:10px;background:{color};border-radius:50%;margin-right:6px"></span>{category}',
             unsafe_allow_html=True,
         )
-    st.caption("Node size is calculated from the number of visible connected entities using compact square-root scaling. The map uses deterministic server-side positioning and no continuous physics. Selecting a stakeholder traces its full connected branch; 'You' is treated as a terminal hub unless 'You' itself is selected. Relevance, reachability and alignment remain stakeholder attributes shown in the detail card.")
+    st.markdown("**How to read the stakeholder fields**")
+    d1, d2 = st.columns(2)
+    with d1:
+        st.markdown("**Relevance** — how important the stakeholder is to the objective or topic being mapped.  \
+**Reachability** — how easily the team can access the stakeholder directly or through existing relationships.  \
+**Alignment** — how supportive, compatible, or positively disposed the stakeholder is toward the objective.")
+    with d2:
+        st.markdown("**Status** — the recorded relationship stage, such as current, historical, or target.  \
+**Node size** — calculated automatically from the number of visible connected entities; it is not based on Relevance.  \
+**Relationship trace** — selecting a stakeholder shows their full connected branch; `You` acts as a terminal hub unless `You` itself is selected.")
+    st.caption("The map uses deterministic server-side positioning with no continuous physics.")
