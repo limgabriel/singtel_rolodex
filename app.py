@@ -412,7 +412,7 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
     <div id="panelHead"><h3 id="panelTitle"></h3><div id="panelSubtitle"></div></div>
     <div id="panelBody"></div>
   </aside>
-  <div id="hint">Scroll to zoom · drag to pan · nodes auto-separate · click a stakeholder to trace its full relationship branch</div>
+  <div id="hint">Scroll to zoom · drag to pan · static layout · drag a node to reposition it · click a stakeholder to trace its full relationship branch</div>
 </div>
 <script>
   const originalNodes = {nodes_json};
@@ -428,19 +428,7 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
     autoResize:true,
     layout:{{improvedLayout:false}},
     interaction:{{hover:true, multiselect:false, navigationButtons:false, keyboard:true, tooltipDelay:220}},
-    physics:{{
-      enabled:true,
-      solver:'barnesHut',
-      barnesHut:{{
-        gravitationalConstant:-5200,
-        centralGravity:0.025,
-        springLength:235,
-        springConstant:0.018,
-        damping:0.72,
-        avoidOverlap:1
-      }},
-      stabilization:{{enabled:true,iterations:220,updateInterval:25,fit:false}}
-    }},
+    physics:{{enabled:false}},
     nodes:{{
       chosen:{{node:(values)=>{{values.borderWidth=4;}}, label:(values)=>{{values.size=16; values.mod='bold';}}}},
       shadow:{{enabled:true,size:8,x:0,y:2,color:'rgba(0,0,0,.38)'}},
@@ -455,7 +443,6 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
   let labelRefreshTimer = null;
   let activeTraceNodes = null;
   let activeTraceEdges = null;
-  let collisionSettlePending = true;
   const hubName = originalNodes.some(n => n.id === 'You') ? 'You' : rootName;
 
   function buildAdjacency() {{
@@ -503,16 +490,7 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
     return {{nodes:seenNodes, edges:cleanEdges}};
   }}
 
-  function settleCollisions(iterations=100) {{
-    collisionSettlePending = true;
-    network.setOptions({{physics:{{
-      enabled:true,
-      solver:'barnesHut',
-      barnesHut:{{gravitationalConstant:-5200,centralGravity:0.025,springLength:235,springConstant:0.018,damping:0.72,avoidOverlap:1}},
-      stabilization:{{enabled:true,iterations:iterations,fit:false}}
-    }}}});
-    network.stabilize(iterations);
-  }}
+
 
   function transparentFont(n) {{
     const f = Object.assign({{}}, n.font || {{}});
@@ -713,15 +691,9 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
 
   network.on('zoom', () => scheduleLabelRefresh(20));
   network.on('dragEnd', params => {{
+    // Physics is deliberately disabled. Dragging moves only the node(s) the
+    // user touched and the rest of the map remains completely stable.
     scheduleLabelRefresh(20);
-    if (params.nodes && params.nodes.length) settleCollisions(70);
-  }});
-  network.on('stabilized', () => {{
-    if (collisionSettlePending) {{
-      collisionSettlePending = false;
-      network.setOptions({{physics:{{enabled:false}}}});
-      scheduleLabelRefresh(30);
-    }}
   }});
   network.on('hoverNode', params => {{
     hoveredNodeId = params.node;
@@ -752,7 +724,6 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
   function applyInitialView() {{
     if (initialViewApplied) return;
     initialViewApplied = true;
-    network.setOptions({{physics:{{enabled:false}}}});
     network.fit({{animation:false}});
     setTimeout(()=>refreshLabels(), 80);
     const target = jumpTo && nodes.get(jumpTo) ? jumpTo : rootName;
@@ -763,8 +734,9 @@ def graph_html(nodes, edges, root_name, jump_to, height=840):
       }}, 120);
     }}
   }}
-  network.once('stabilized', applyInitialView);
-  setTimeout(applyInitialView, 1800);
+  // There is no stabilization lifecycle because physics is disabled.
+  // The Python-generated x/y coordinates are the authoritative layout.
+  setTimeout(applyInitialView, 60);
 </script>
 </body>
 </html>
@@ -783,7 +755,7 @@ h1 {margin-bottom:.1rem; font-size:2rem !important;}
 """, unsafe_allow_html=True)
 
 st.title("Stakeholder Rolodex")
-st.markdown('<div class="small-muted">Relationship intelligence prototype · V0.4</div>', unsafe_allow_html=True)
+st.markdown('<div class="small-muted">Relationship intelligence prototype · V0.5</div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.subheader("Data")
@@ -867,4 +839,4 @@ with st.expander("Legend"):
             f'<span style="display:inline-block;width:10px;height:10px;background:{color};border-radius:50%;margin-right:6px"></span>{category}',
             unsafe_allow_html=True,
         )
-    st.caption("Node size is calculated from the number of visible connected entities using compact square-root scaling. Collision physics separates nodes before the map is frozen. Selecting a stakeholder traces its full connected branch; 'You' is treated as a terminal hub unless 'You' itself is selected. Relevance, reachability and alignment remain stakeholder attributes shown in the detail card.")
+    st.caption("Node size is calculated from the number of visible connected entities using compact square-root scaling. The map uses deterministic server-side positioning and no continuous physics. Selecting a stakeholder traces its full connected branch; 'You' is treated as a terminal hub unless 'You' itself is selected. Relevance, reachability and alignment remain stakeholder attributes shown in the detail card.")
